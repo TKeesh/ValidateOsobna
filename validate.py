@@ -2,6 +2,19 @@ import cv2
 import numpy as np
 from datetime import datetime # MOZE SE ZAKOMENTIRAT - samo u mainu
 import os # MOZE SE ZAKOMENTIRAT - samo u mainu
+import config
+
+
+def log(s, toLog=config.toLog, toPrint=config.toPrint):
+	if toLog:
+		with open('./log.txt', 'a') as f:
+			f.write(s + '\n')
+	if toPrint:
+		print (s)
+
+
+def clear_log():
+	open('./log.txt', 'w').close()
 
 
 # Funkcija za normalizaciju luminosity-a, patterna (grb) na temlju slike
@@ -31,14 +44,14 @@ def adjust_luma(img, pattern):
 #	vraca:
 #		(x, y) detektiranog grba
 #		broj znacajki koje se poklapaju
-def features_matching(img_main):
+def features_matching(img_main):	
 	lower_red = np.array([80,70,50])
 	upper_red = np.array([100,255,255])
 	
 	height, width, channels = img_main.shape	
 	
 	# Podrucje slike za detekciju gdje bi trebao biti grb, dosta siroko
-	img_main = img_main[0:int(height*0.4), int(width*0.4):int(width*0.85)]
+	img_main = img_main[int(height*config.grb_y0):int(height*config.grb_y1), int(width*config.grb_x0):int(width*config.grb_x1)]
 	#img_main = cv2.medianBlur(img_main, 3)
 
 	# Detekcija crvene boje preko HSV prostora boja. img_main_inv jest maskirana slika - sadrzi sve crno osim onog sto je crveno
@@ -116,7 +129,8 @@ def detect_face(img_main, x_grb, y_grb):
 			x, y = x+(x_grb-10)+int(w/2), y+(y_grb+40)+int(h/2)
 		cv2.rectangle(cl1,(x,y),(x+w,y+h),(255,0,0),2)
 	#cv2.imshow('faces', cl1)
-	print('faces len: ', len(faces))
+	if len(faces) > 1:
+		log( '      broj pronadjenih portreta: {0}; uzimam najveci kao relevantan'.format(str(len(faces))) )
 
 	# Vraca najvece detektirano lice na ulaznom podrucju. Gotovo uvijek ce biti 0 ili 1 detektirano, ali za svaki slucaj
 	return x, y
@@ -134,10 +148,12 @@ def angle_between(p1, p2):
 #	vraca:
 #		0  - nije osobna
 #		-1 - blurrana osobna
-#		>0 - ok sobna, vrijednost = blurriness
+#		>0 - ok sobna, vrijednost = sharpness
 def validate_front(img_path):
+	global img_to_show
 	# Citanje slike
 	img_main = cv2.imread(img_path)
+	img_to_show = img_main.copy()
 	h, w, c = img_main.shape
 	
 	# Detekcija pozicije graba. 
@@ -145,67 +161,87 @@ def validate_front(img_path):
 	try:
 		x_grb, y_grb, score = features_matching(img_main.copy())
 	except:
-		print('NE0!!!')
+		log('   grb nije detektiran !!')
 		return 0
 	
-	print ('grb (x, y, score): ', x_grb, y_grb, score)
+	log('   grb detektiran (x y score): {0} {1} {2}'.format(str(x_grb), str(y_grb), str(score)))
+	cv2.circle(img_to_show, (x_grb,y_grb), 5, 255, -1)
+	
 	# Hardkodirani thresholdi pozicije grba i broja dobro spojenih znacajki
-	if (205 < x_grb < 275) and (5 < y_grb < 65) and (score > 5):
-		print('OK1')
+	if (config.x_grb_l < x_grb < config.x_grb_h) and (config.y_grb_l < y_grb < config.y_grb_h) and (score > config.score):
+		log('   grb unutar dozvoljene pozicije')
 		
 		# Ako je detekcija unutar threshola idemo na detekciju portreta. try-except kao i gore.
 		try:
 			x_face, y_face = detect_face(img_main.copy(), x_grb, y_grb)
 		except:
-			print('NE2o!!!')
+			log('   portret nije detektiran !!')
 			return 0
-		print ('face (x, y): ', x_face, y_face)
+		
+		log('   portret detektiran (x y): {0} {1}'.format(str(x_face), str(y_face)))
+		cv2.circle(img_to_show, (x_face,y_face), 5, 255, -1)
 		
 		# Racunanje udaljenosti i kuta izmadju grba i portreta
 		grb = np.array((x_grb,y_grb))
 		face = np.array((x_face,y_face))
 		dist = np.linalg.norm(grb - face)
 		angle = angle_between(face, grb)
-		print ('distance (grb - face): ', dist)
-		print ('angle (face - grb): ', angle)
+		log('   udaljenost grba i portreta: {0}'.format(str(dist)))
+		log('   kut grba i portreta i y-osi: {0}'.format(str(angle)))
 
 		# Hardkodirani thresholdi za provjeru udaljenosti i kuta grba i portreta
-		if (115 < dist < 155) and (0 < angle < 40):
-			print ('OK2')
-			# Prikaz detektiranih podrucja: (x, y) - grba, (x, y) - portreta
-			cv2.circle(img_main, (x_grb,y_grb), 5, 255, -1)
-			cv2.circle(img_main, (x_face,y_face), 5, 255, -1)
-			cv2.imshow('MAIN', img_main)
-			
-			# Jednostavno racunanje blurrinessa slike. Hardkoridan threshold za provjeru.
-			blurriness = cv2.Laplacian(img_main[int(h*0.05):int(h*0.95), int(w*0.05):int(w*0.95)], cv2.CV_64F).var()
-			print('blurriness: ', blurriness)		
-			if blurriness > 80:
-				return blurriness
+		if (config.dist_l < dist < config.dist_h) and (config.angle_l < angle < config.angle_h):
+			log('   udaljenost i kut unutar dozvoljenih vrijednosti')									
+
+			# Jednostavno racunanje sharpness slike. Hardkoridan threshold za provjeru.
+			sharpness = cv2.Laplacian(img_main[int(h*0.05):int(h*0.95), int(w*0.05):int(w*0.95)], cv2.CV_64F).var()
+			log('   sharpness: {0}'.format(str(sharpness)))		
+			if sharpness > config.sharpness:
+				return sharpness
 			else:
-				print('BLURRED!!!')
+				log('   previse blurana !!')
 				return -1
 		else:
-			print('NE2!!!')
+			log('   udaljenost ili kut odstupaju !!')
 			return 0
 	else:
-		print('NE1!!!')
+		log('   grb van dozvoljene pozicije !!')
 		return 0
 
 
+img_to_show = 0
 # Main 
 #	Cita ./test/ direktorij te validira slike u njemu
 if __name__ == '__main__':
+	global img_to_show
+
+	if config.toLog: clear_log()
+	cv2.namedWindow('img')
+
 	imgs = os.listdir('./test/')
 	imgs = [img for img in imgs if img.endswith('.jpg')]
-	cv2.namedWindow('frame', cv2.WINDOW_NORMAL)
-	for img_path in imgs:
-		print (img_path)
+	for img_path in imgs:		
+		log('Validating img: ' + img_path)
+
+		img_path = './test/' + img_path
+		
 		startTime = datetime.now()
-		print('VALID: ', validate_front(img_path))
-		print (datetime.now() - startTime)
+
+		valid = validate_front(img_path)
+		if valid:
+			cv2.putText(img_to_show, 'Valid', (10,30), cv2.FONT_HERSHEY_SIMPLEX, 1,(0,255,0),2,cv2.LINE_AA) 
+			log('VALID: ' + str(valid))
+		else: 
+			cv2.putText(img_to_show, 'NOT valid', (10,30), cv2.FONT_HERSHEY_SIMPLEX, 1,(0,0,255),2,cv2.LINE_AA) 
+			log('NOT VALID !!')
+
+		cv2.imshow('img', img_to_show)
+		log('execution time: ' + str(datetime.now() - startTime))
+		
 		inKey = cv2.waitKey(0) & 0xFF
 		if inKey == ord('q'):
 			break
+		log('')
+
 	cv2.destroyAllWindows()
 
