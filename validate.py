@@ -152,9 +152,12 @@ def angle_between(p1, p2):
 def validate_front(img_path):
 	global img_to_show
 	# Citanje slike
-	img_main = cv2.imread(img_path)
-	img_to_show = img_main.copy()
+	img_main = cv2.imread(img_path)	
 	h, w, c = img_main.shape
+	r = 380 / w
+	img_main = cv2.resize(img_main, (385, int(h * r)))
+	h, w, c = img_main.shape
+	img_to_show = img_main.copy()
 	
 	# Detekcija pozicije graba. 
 	# try-except blok osigurava crash features_matching funkcije. To je indikacija da detekcija grba nije uspijela. Isto se koristi za detekciju portreta.
