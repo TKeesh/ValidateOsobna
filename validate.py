@@ -23,20 +23,83 @@ def clear_log():
 #		pattern (grb)
 #	vraca: normalizirani pattern
 def adjust_luma(img, pattern):
-	if len(img):
+	if img != None:
 		img_yuv = cv2.cvtColor(img, cv2.COLOR_BGR2YUV)
 		minVal, maxVal, minLoc, maxLoc = cv2.minMaxLoc(img_yuv[:,:,0])
 	else:
 		minVal, maxVal = 0, 255
-	#minValU, maxValU, minLocU, maxLocU = cv2.minMaxLoc(img_yuv[:,:,1]) # za normalizaciju U komponente
-	#minValV, maxValV, minLocV, maxLocV = cv2.minMaxLoc(img_yuv[:,:,2]) # za normalizaciju V komponente
+
 	pattern_yuv = cv2.cvtColor(pattern, cv2.COLOR_BGR2YUV)
 	y, u, v = cv2.split(pattern_yuv)
 	cv2.normalize(y, y, minVal, maxVal, cv2.NORM_MINMAX)
-	#cv2.normalize(u, u, minValU, maxValU, cv2.NORM_MINMAX) # za normalizaciju U komponente
-	#cv2.normalize(v, v, minValV, maxValV, cv2.NORM_MINMAX) # za normalizaciju V komponente
 	pattern = cv2.cvtColor(cv2.merge((y,u,v)), cv2.COLOR_YUV2BGR)
+
 	return pattern
+
+
+def adjust_all(img, pattern):
+	if img != None:
+		img_yuv = cv2.cvtColor(img, cv2.COLOR_BGR2YUV)
+		y0, y1, minLoc, maxLoc = cv2.minMaxLoc(img_yuv[:,:,0])
+		u0, u1, minLoc, maxLoc = cv2.minMaxLoc(img_yuv[:,:,1])
+		v0, v1, minLoc, maxLoc = cv2.minMaxLoc(img_yuv[:,:,2])
+	else:
+		y0, y1 = 0, 255
+		u0, u1 = 0, 255
+		v0, v1 = 0, 255
+
+	pattern_yuv = cv2.cvtColor(pattern, cv2.COLOR_BGR2YUV)
+	y, u, v = cv2.split(pattern_yuv)
+	cv2.normalize(y, y, y0, y1, cv2.NORM_MINMAX)
+	cv2.normalize(u, u, u0, u1, cv2.NORM_MINMAX)
+	cv2.normalize(v, v, v0, v1, cv2.NORM_MINMAX)
+	pattern = cv2.cvtColor(cv2.merge((y,u,v)), cv2.COLOR_YUV2BGR)
+
+	return pattern
+
+
+
+def hist_match(source, template):
+	"""
+	Adjust the pixel values of a grayscale image such that its histogram
+	matches that of a target image
+
+	Arguments:
+	-----------
+	    source: np.ndarray
+	        Image to transform; the histogram is computed over the flattened
+	        array
+	    template: np.ndarray
+	        Template image; can have different dimensions to source
+	Returns:
+	-----------
+	    matched: np.ndarray
+	        The transformed output image
+	"""
+
+	oldshape = source.shape
+	source = source.ravel()
+	template = template.ravel()
+
+	# get the set of unique pixel values and their corresponding indices and
+	# counts
+	s_values, bin_idx, s_counts = np.unique(source, return_inverse=True,
+	                                        return_counts=True)
+	t_values, t_counts = np.unique(template, return_counts=True)
+
+	# take the cumsum of the counts and normalize by the number of pixels to
+	# get the empirical cumulative distribution functions for the source and
+	# template images (maps pixel value --> quantile)
+	s_quantiles = np.cumsum(s_counts).astype(np.float64)
+	s_quantiles /= s_quantiles[-1]
+	t_quantiles = np.cumsum(t_counts).astype(np.float64)
+	t_quantiles /= t_quantiles[-1]
+
+	# interpolate linearly to find the pixel values in the template image
+	# that correspond most closely to the quantiles in the source image
+	interp_t_values = np.interp(s_quantiles, t_quantiles, t_values)
+
+	return interp_t_values[bin_idx].reshape(oldshape)
 
 
 # Detekcija grba na temelju ORB znacajki
@@ -51,8 +114,15 @@ def features_matching(img_main):
 	height, width, channels = img_main.shape	
 	
 	# Podrucje slike za detekciju gdje bi trebao biti grb, dosta siroko
-	img_main = img_main[int(height*config.grb_y0):int(height*config.grb_y1), int(width*config.grb_x0):int(width*config.grb_x1)]
+	img_main = img_main[int(height*config.grb_y0):int(height*config.grb_y1), int(width*config.grb_x0):int(width*config.grb_x1)]	
 	#img_main = cv2.medianBlur(img_main, 3)
+	#img_main = cv2.GaussianBlur(img_main,(3,3),0)
+
+
+	img_gray = cv2.cvtColor(img_main, cv2.COLOR_BGR2GRAY)
+	equ_main = cv2.equalizeHist(img_gray)
+	clahe = cv2.createCLAHE(clipLimit=1.5, tileGridSize=(8,8))
+	cl1 = clahe.apply(img_gray)
 
 	# Detekcija crvene boje preko HSV prostora boja. img_main_inv jest maskirana slika - sadrzi sve crno osim onog sto je crveno
 	img_main_inv = cv2.bitwise_not(img_main)
@@ -62,8 +132,20 @@ def features_matching(img_main):
 
 	# Citanje patterna (grb). Prilagodjavanje luminosity-a na temelju sliku. Denoisanje
 	img_grb = cv2.imread('./grb.jpg')
+
+
 	img_grb = adjust_luma(img_main, img_grb)
-	img_grb = cv2.medianBlur(img_grb, 3)
+	#img_grb = adjust_all(img_main, img_grb)
+	
+	#img_grb_equ = hist_match(img_grb_gray.copy(), img_gray.copy())
+
+	#img_grb = cv2.medianBlur(img_grb, 3)
+	img_grb_gray = cv2.cvtColor(img_grb, cv2.COLOR_BGR2GRAY)
+	equ_grb = cv2.equalizeHist(img_grb_gray)
+	cl2 = clahe.apply(img_grb_gray)
+	#cl2 = cv2.GaussianBlur(cl2,(3,3),0)
+	#img_grb = cv2.GaussianBlur(img_grb,(7,7),0) #!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+	#cv2.imshow('grb',img_grb)
 
 	# Detekcija crvene boje na slici grba, isto kao i gore, kako bi znacajke bile preciznije
 	img_grb_inv = cv2.bitwise_not(img_grb)
@@ -71,10 +153,13 @@ def features_matching(img_main):
 	img_grb_mask = cv2.inRange(img_grb_inv, lower_red, upper_red)
 	img_grb_inv = cv2.bitwise_and(img_grb, img_grb, mask=img_grb_mask)
 
+	#img_main_inv = adjust_all(img_main_inv, img_main_inv)
+	cv2.imshow('t1', cl1)
+	cv2.imshow('t2', cl2)
 	# Racunanje znacajki nad izrezanom maskiranom slikom i maskiranom grbu
 	orb = cv2.ORB_create()
-	kp1, des1 = orb.detectAndCompute(img_main_inv,None)
-	kp2, des2 = orb.detectAndCompute(img_grb_inv,None)
+	kp1, des1 = orb.detectAndCompute(cl1,None)
+	kp2, des2 = orb.detectAndCompute(cl2,None)
 	bf = cv2.BFMatcher(cv2.NORM_HAMMING, crossCheck=True)
 	matches = bf.match(des1,des2)
 
@@ -96,6 +181,97 @@ def features_matching(img_main):
 	return x_sum+int(width*0.4), y_sum, len(matches)
 
 
+def detect_nose(img_main):
+	height, width, channels = img_main.shape
+	img_gray = cv2.cvtColor(img_main[int(height*0.2):int(height*0.8), int(width*0.1):int(width*0.7)], cv2.COLOR_BGR2GRAY)
+	clahe = cv2.createCLAHE(clipLimit=1.5, tileGridSize=(6,6))
+	cl1 = clahe.apply(img_gray)
+
+	face_cascade = cv2.CascadeClassifier('./haarcascade_mcs_nose.xml')
+	faces = face_cascade.detectMultiScale(cl1, 1.1, 4)
+
+	x0, y0, area = -1, -1, 2000
+	for (x,y,w,h) in faces:
+		if w*h < area:
+			area = w*h
+			x0, y0 = x+int(width*0.1)+int(w/2), y+int(height*0.2)+int(h/2)
+		#cv2.rectangle(img_gray,(x,y),(x+w,y+h),(255,0,0),2)
+	#cv2.circle(img_main, (x0,y0), 5, 255, -1)
+	#cv2.imshow('nose', img_gray)
+
+	return x0, y0, area
+
+
+def detect_right_eye(img_main):
+	height, width, channels = img_main.shape
+	img_main = img_main[int(height*0.2):int(height*0.7), int(width*0.2):int(width*0.9)]
+	face_cascade = cv2.CascadeClassifier('./haarcascade_mcs_righteye.xml')
+	faces = face_cascade.detectMultiScale(img_main, 1.1, 4)
+
+	x0, y0, area = -1, -1, 1500
+	for (x,y,w,h) in faces:
+		print ('TEST: ', w*h)
+		if w*h < area:
+			area = w*h
+			x0, y0 = x+int(width*0.2)+int(w/2), y+int(height*0.2)+int(h/2)
+		cv2.rectangle(img_main,(x,y),(x+w,y+h),(255,0,0),2)
+	#cv2.circle(img_main, (x0,y0), 5, 255, -1)
+	#cv2.imshow('eye', img_main)
+
+	return x0, y0, area
+
+
+'''
+def detect_mouth(img_main):
+	height, width, channels = img_main.shape
+	img_gray = cv2.cvtColor(img_main[int(height*0.4):int(height*0.9), int(width*0.1):int(width*0.8)], cv2.COLOR_BGR2GRAY)
+	clahe = cv2.createCLAHE(clipLimit=1.5, tileGridSize=(6,6))
+	cl1 = clahe.apply(img_gray)
+
+	cv2.imshow('test', cl1)
+
+	face_cascade = cv2.CascadeClassifier('./Mouth.xml')
+	faces = face_cascade.detectMultiScale(cl1, 1.1, 4)
+
+	x0, y0, area = -1, -1, -1
+	for (x,y,w,h) in faces:
+		print ('TEST: ', w*h)
+		if w*h > area:
+			area = w*h
+			x0, y0 = x, y
+		cv2.rectangle(img_gray,(x,y),(x+w,y+h),(255,0,0),2)
+	cv2.imshow('mouth', img_gray)
+
+	return x0, y0, area
+'''
+
+
+def detect_face_parts(img_main, x_grb, y_grb):
+	height, width, channels = img_main.shape
+	img_main = img_main[y_grb+40:int(height*0.97), x_grb-10:int(width*0.97)]
+
+	try: x_nose, y_nose, area_nose = detect_nose(img_main.copy())
+	except: x_nose, y_nose = -1, -1
+
+	try: x_eye, y_eye, area_eye = detect_right_eye(img_main.copy())
+	except: x_eye, y_eye = -1, -1
+
+	#detect_mouth(img_main.copy())
+
+	# cv2.circle(img_main, (x_nose,y_nose), 5, 255, -1)
+	# cv2.circle(img_main, (x_eye,y_eye), 5, 255, -1)
+	# cv2.imshow('test', img_main)
+
+	if x_nose != -1 and x_eye != -1:
+		return int((x_nose+x_eye) / 2)-7 + (x_grb-10), int((y_nose+y_eye) / 2)+7 + (y_grb+40)
+	elif x_nose != -1:
+		return x_nose + (x_grb-10), y_nose + (y_grb+40)
+	elif x_eye != -1:
+		return x_eye-10 + (x_grb-15), y_eye+15 + (y_grb+40)
+	else:
+		return -1, -1
+
+
 # Detekcija portreta
 #	prima:
 #		sliku
@@ -109,31 +285,23 @@ def detect_face(img_main, x_grb, y_grb):
 	
 	# Normalizira luminosity (0 - 255), moze pomoci u nekim slucajevima, za sada se cini da nije potrebno
 	#img_main = adjust_luma(None, img_main)
-	
-	img_gray = cv2.cvtColor(img_main, cv2.COLOR_BGR2GRAY)
-	
-	# Moze posluziti za denoise, ali uglavnom nije potrebno
-	#cl1 = cv2.medianBlur(cl1, 3)
-
-	# CLAHE filter - normalizacija histograma na temelju kontrasta, otklanjanje odsjaja (da ne bi blic zasvijetlio portret)
-	clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8,8))
-	cl1 = clahe.apply(img_gray)	
+	#img_gray = cv2.GaussianBlur(img_gray,(3,3),0)
 
 	# Detekcija portreta pomocu haarcascade naucenih znacajki - neovisno o orijentaciji, kontrastu, velicini...
-	face_cascade = cv2.CascadeClassifier('./haarcascade_frontalface.xml')
-	faces = face_cascade.detectMultiScale(cl1, 1.3, 5)
-	x, y, area = -1, -1, -1
+	face_cascade = cv2.CascadeClassifier('./haarcascade_frontalface_alt.xml')
+	faces = face_cascade.detectMultiScale(img_main, 1.1, 2)
+	x0, y0, area = -1, -1, -1
 	for (x,y,w,h) in faces:
 		if w*h > area:
 			area = w*h
-			x, y = x+(x_grb-10)+int(w/2), y+(y_grb+40)+int(h/2)
-		cv2.rectangle(cl1,(x,y),(x+w,y+h),(255,0,0),2)
+			x0, y0 = x+(x_grb-10)+int(w/2), y+(y_grb+40)+int(h/2)
+		# cv2.rectangle(img_main,(x,y),(x+w,y+h),(255,0,0),2)
 	#cv2.imshow('faces', cl1)
 	if len(faces) > 1:
 		log( '      broj pronadjenih portreta: {0}; uzimam najveci kao relevantan'.format(str(len(faces))) )
 
 	# Vraca najvece detektirano lice na ulaznom podrucju. Gotovo uvijek ce biti 0 ili 1 detektirano, ali za svaki slucaj
-	return x, y
+	return x0, y0
 
 
 # Kut izmedju dvije tocke i y osi
@@ -178,9 +346,16 @@ def validate_front(img_path):
 		try:
 			x_face, y_face = detect_face(img_main.copy(), x_grb, y_grb)
 		except:
-			log('   portret nije detektiran !!')
-			return 0
+			x_face, y_face = -1, -1
+			log('   portret nije detektiran')
+
+		if x_face < 0 or y_face < 0:
+			x_face, y_face = detect_face_parts(img_main.copy(), x_grb, y_grb)
 		
+		if x_face < 0 or y_face < 0:
+			log('   niti jedan dio lica nije detektiran !!')
+			return 0
+
 		log('   portret detektiran (x y): {0} {1}'.format(str(x_face), str(y_face)))
 		cv2.circle(img_to_show, (x_face,y_face), 5, 255, -1)
 		
@@ -223,6 +398,7 @@ if __name__ == '__main__':
 
 	imgs = os.listdir('./test/')
 	imgs = [img for img in imgs if img.endswith('.jpg')]
+	to_end = False
 	for img_path in imgs:		
 		log('Validating img: ' + img_path)
 
@@ -231,7 +407,7 @@ if __name__ == '__main__':
 		startTime = datetime.now()
 
 		valid = validate_front(img_path)
-		if valid:
+		if valid > 0:
 			cv2.putText(img_to_show, 'Valid', (10,30), cv2.FONT_HERSHEY_SIMPLEX, 1,(0,255,0),2,cv2.LINE_AA) 
 			log('VALID: ' + str(valid))
 		else: 
@@ -241,9 +417,12 @@ if __name__ == '__main__':
 		cv2.imshow('img', img_to_show)
 		log('execution time: ' + str(datetime.now() - startTime))
 		
-		inKey = cv2.waitKey(0) & 0xFF
-		if inKey == ord('q'):
-			break
+		if not to_end:
+			inKey = cv2.waitKey(0) & 0xFF
+			if inKey == ord('q'):
+				break
+			elif inKey == ord('e'):
+				to_end = True
 		log('')
 
 	cv2.destroyAllWindows()

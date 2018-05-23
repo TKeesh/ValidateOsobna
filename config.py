@@ -2,7 +2,7 @@
 toLog = True
 
 # ispis u konzolu
-toPrint = False
+toPrint = True
 
 # podrucje detekcije grba, u postocima. (0, 0) - je gore lijevo
 grb_y0 = 0
@@ -19,7 +19,7 @@ y_grb_h = 65
 score = 5
 
 # udaljenost grba i portreta
-dist_l = 115
+dist_l = 100
 dist_h = 155
 angle_l = 0
 angle_h = 40
