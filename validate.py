@@ -273,11 +273,11 @@ def validate_front(img_path):
 	
 	# Detekcija pozicije graba. 
 	# try-except blok osigurava crash features_matching funkcije. To je indikacija da detekcija grba nije uspijela. Isto se koristi za detekciju portreta.
-	try:
-		x_grb, y_grb, score = features_matching(img_main.copy())
-	except:
-		log('   grb nije detektiran !!')
-		return 0
+	#try:
+	x_grb, y_grb, score = features_matching(img_main.copy())
+	#except:
+	#	log('   grb nije detektiran !!')
+	#	return 0
 	
 	log('   grb detektiran (x y score): {0} {1} {2}'.format(str(x_grb), str(y_grb), str(score)))
 	cv2.circle(img_to_show, (x_grb,y_grb), 5, 255, -1)
