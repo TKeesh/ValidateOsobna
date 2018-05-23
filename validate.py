@@ -37,6 +37,8 @@ def adjust_luma(img, pattern):
 	return pattern
 
 
+# Slicno kao gore samo sto normalizira sve kanale slike
+#	radi za bilo koji prostor slika dubine 3
 def adjust_all(img, pattern):
 	if img != None:
 		img_yuv = cv2.cvtColor(img, cv2.COLOR_BGR2YUV)
@@ -58,104 +60,40 @@ def adjust_all(img, pattern):
 	return pattern
 
 
-
-def hist_match(source, template):
-	"""
-	Adjust the pixel values of a grayscale image such that its histogram
-	matches that of a target image
-
-	Arguments:
-	-----------
-	    source: np.ndarray
-	        Image to transform; the histogram is computed over the flattened
-	        array
-	    template: np.ndarray
-	        Template image; can have different dimensions to source
-	Returns:
-	-----------
-	    matched: np.ndarray
-	        The transformed output image
-	"""
-
-	oldshape = source.shape
-	source = source.ravel()
-	template = template.ravel()
-
-	# get the set of unique pixel values and their corresponding indices and
-	# counts
-	s_values, bin_idx, s_counts = np.unique(source, return_inverse=True,
-	                                        return_counts=True)
-	t_values, t_counts = np.unique(template, return_counts=True)
-
-	# take the cumsum of the counts and normalize by the number of pixels to
-	# get the empirical cumulative distribution functions for the source and
-	# template images (maps pixel value --> quantile)
-	s_quantiles = np.cumsum(s_counts).astype(np.float64)
-	s_quantiles /= s_quantiles[-1]
-	t_quantiles = np.cumsum(t_counts).astype(np.float64)
-	t_quantiles /= t_quantiles[-1]
-
-	# interpolate linearly to find the pixel values in the template image
-	# that correspond most closely to the quantiles in the source image
-	interp_t_values = np.interp(s_quantiles, t_quantiles, t_values)
-
-	return interp_t_values[bin_idx].reshape(oldshape)
-
-
 # Detekcija grba na temelju ORB znacajki
 #	prima: sliku
 #	vraca:
 #		(x, y) detektiranog grba
 #		broj znacajki koje se poklapaju
 def features_matching(img_main):	
-	lower_red = np.array([80,70,50])
-	upper_red = np.array([100,255,255])
-	
 	height, width, channels = img_main.shape	
 	
 	# Podrucje slike za detekciju gdje bi trebao biti grb, dosta siroko
-	img_main = img_main[int(height*config.grb_y0):int(height*config.grb_y1), int(width*config.grb_x0):int(width*config.grb_x1)]	
+	img_main = img_main[int(height*config.grb_y0):int(height*config.grb_y1), int(width*config.grb_x0):int(width*config.grb_x1)]
 	#img_main = cv2.medianBlur(img_main, 3)
 	#img_main = cv2.GaussianBlur(img_main,(3,3),0)
-
 
 	img_gray = cv2.cvtColor(img_main, cv2.COLOR_BGR2GRAY)
 	equ_main = cv2.equalizeHist(img_gray)
 	clahe = cv2.createCLAHE(clipLimit=1.5, tileGridSize=(8,8))
 	cl1 = clahe.apply(img_gray)
 
-	# Detekcija crvene boje preko HSV prostora boja. img_main_inv jest maskirana slika - sadrzi sve crno osim onog sto je crveno
-	img_main_inv = cv2.bitwise_not(img_main)
-	img_main_inv = cv2.cvtColor(img_main_inv, cv2.COLOR_BGR2HSV)
-	img_main_mask = cv2.inRange(img_main_inv, lower_red, upper_red)
-	img_main_inv = cv2.bitwise_and(img_main, img_main, mask=img_main_mask)
-
 	# Citanje patterna (grb). Prilagodjavanje luminosity-a na temelju sliku. Denoisanje
 	img_grb = cv2.imread('./grb.jpg')
 
-
 	img_grb = adjust_luma(img_main, img_grb)
 	#img_grb = adjust_all(img_main, img_grb)
-	
-	#img_grb_equ = hist_match(img_grb_gray.copy(), img_gray.copy())
-
 	#img_grb = cv2.medianBlur(img_grb, 3)
+
 	img_grb_gray = cv2.cvtColor(img_grb, cv2.COLOR_BGR2GRAY)
 	equ_grb = cv2.equalizeHist(img_grb_gray)
 	cl2 = clahe.apply(img_grb_gray)
 	#cl2 = cv2.GaussianBlur(cl2,(3,3),0)
-	#img_grb = cv2.GaussianBlur(img_grb,(7,7),0) #!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-	#cv2.imshow('grb',img_grb)
+	#img_grb = cv2.GaussianBlur(img_grb,(7,7),0)
 
-	# Detekcija crvene boje na slici grba, isto kao i gore, kako bi znacajke bile preciznije
-	img_grb_inv = cv2.bitwise_not(img_grb)
-	img_grb_inv = cv2.cvtColor(img_grb_inv, cv2.COLOR_BGR2HSV)
-	img_grb_mask = cv2.inRange(img_grb_inv, lower_red, upper_red)
-	img_grb_inv = cv2.bitwise_and(img_grb, img_grb, mask=img_grb_mask)
+	#cv2.imshow('t1', cl1)
+	#cv2.imshow('t2', cl2)
 
-	#img_main_inv = adjust_all(img_main_inv, img_main_inv)
-	cv2.imshow('t1', cl1)
-	cv2.imshow('t2', cl2)
 	# Racunanje znacajki nad izrezanom maskiranom slikom i maskiranom grbu
 	orb = cv2.ORB_create()
 	kp1, des1 = orb.detectAndCompute(cl1,None)
@@ -181,6 +119,7 @@ def features_matching(img_main):
 	return x_sum+int(width*0.4), y_sum, len(matches)
 
 
+# Detekcija nosa
 def detect_nose(img_main):
 	height, width, channels = img_main.shape
 	img_gray = cv2.cvtColor(img_main[int(height*0.2):int(height*0.8), int(width*0.1):int(width*0.7)], cv2.COLOR_BGR2GRAY)
@@ -202,6 +141,8 @@ def detect_nose(img_main):
 	return x0, y0, area
 
 
+# Detekcija desnog oka
+#	nazalost nekad detektira lijevo oko
 def detect_right_eye(img_main):
 	height, width, channels = img_main.shape
 	img_main = img_main[int(height*0.2):int(height*0.7), int(width*0.2):int(width*0.9)]
@@ -222,6 +163,7 @@ def detect_right_eye(img_main):
 
 
 '''
+# Detekcija usta - ToDo
 def detect_mouth(img_main):
 	height, width, channels = img_main.shape
 	img_gray = cv2.cvtColor(img_main[int(height*0.4):int(height*0.9), int(width*0.1):int(width*0.8)], cv2.COLOR_BGR2GRAY)
@@ -246,6 +188,8 @@ def detect_mouth(img_main):
 '''
 
 
+# Detekcija dijelova lica
+#	poziva se kada portret nije detektiran
 def detect_face_parts(img_main, x_grb, y_grb):
 	height, width, channels = img_main.shape
 	img_main = img_main[y_grb+40:int(height*0.97), x_grb-10:int(width*0.97)]
