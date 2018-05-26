@@ -7,18 +7,22 @@ import config
 
 # Globalna varijabla slike - samo za debug
 global img_to_show
+global log_path
 
 
 def log(s, toLog=config.toLog, toPrint=config.toPrint):
+	global log_path
 	if toLog:
-		with open('./log.txt', 'a') as f:
+		with open(log_path, 'a') as f:
 			f.write(s + '\n')
 	if toPrint:
 		print (s)
 
 
-def clear_log():
-	open('./log.txt', 'w').close()
+def init_log(path):
+	global log_path
+	log_path = './log_' + path.strip('/').split('_')[1] + '.txt'
+	open(log_path, 'w').close()
 
 
 # Funkcija za normalizaciju luminosity-a, patterna (grb) na temlju slike
@@ -166,32 +170,6 @@ def detect_right_eye(img_main):
 	return x0, y0, area
 
 
-'''
-# Detekcija usta - ToDo
-def detect_mouth(img_main):
-	height, width, channels = img_main.shape
-	img_gray = cv2.cvtColor(img_main[int(height*0.4):int(height*0.9), int(width*0.1):int(width*0.8)], cv2.COLOR_BGR2GRAY)
-	clahe = cv2.createCLAHE(clipLimit=1.5, tileGridSize=(6,6))
-	cl1 = clahe.apply(img_gray)
-
-	cv2.imshow('test', cl1)
-
-	face_cascade = cv2.CascadeClassifier('./Mouth.xml')
-	faces = face_cascade.detectMultiScale(cl1, 1.1, 4)
-
-	x0, y0, area = -1, -1, -1
-	for (x,y,w,h) in faces:
-		print ('TEST: ', w*h)
-		if w*h > area:
-			area = w*h
-			x0, y0 = x, y
-		cv2.rectangle(img_gray,(x,y),(x+w,y+h),(255,0,0),2)
-	cv2.imshow('mouth', img_gray)
-
-	return x0, y0, area
-'''
-
-
 # Detekcija dijelova lica
 #	poziva se kada portret nije detektiran
 def detect_face_parts(img_main, x_grb, y_grb):
@@ -234,6 +212,7 @@ def detect_face(img_main, x_grb, y_grb):
 	# Normalizira luminosity (0 - 255), moze pomoci u nekim slucajevima, za sada se cini da nije potrebno
 	#img_main = adjust_luma(None, img_main)
 	#img_gray = cv2.GaussianBlur(img_gray,(3,3),0)
+	#clahe!?!
 
 	# Detekcija portreta pomocu haarcascade naucenih znacajki - neovisno o orijentaciji, kontrastu, velicini...
 	face_cascade = cv2.CascadeClassifier('./haarcascade_frontalface_alt.xml')
@@ -259,7 +238,7 @@ def angle_between(p1, p2):
     return np.rad2deg((ang1 - ang2) % (2 * np.pi))
 
 
-# Glavna funkcija
+# Glavna funkcija za validaciju prednje strane osobne
 #	prima: img_path
 #	vraca:
 #		0  - nije osobna
@@ -336,25 +315,59 @@ def validate_front(img_path):
 		return 0
 
 
+# Glavna funkcija za validaciju straznje strane osobne
+#	prima: img_path
+#	vraca:
+#		0  - nije osobna
+#		-1 - blurrana osobna
+#		>0 - ok sobna, vrijednost = sharpness
+def validate_back(img_path):
+	global img_to_show
+	# Citanje slike
+	img_main = cv2.imread(img_path)	
+	h, w, c = img_main.shape
+	r = 380 / w
+	img_main = cv2.resize(img_main, (385, int(h * r)))
+	h, w, c = img_main.shape
+	img_to_show = img_main.copy()
+
+	return 1
+
+
+
 # Main 
 #	Cita ./test/ direktorij te validira slike u njemu
 if __name__ == '__main__':
 	global img_to_show
 
-	if config.toLog: clear_log()
+	# Mode: front or back
+	mode = 'front'
+
+	if mode == 'front':
+		path = './test_front/'
+	elif mode == 'back':
+		path = './test_back/'
+	else:
+		print ('Wrong mode !!')
+		quit()
+
+	if config.toLog: init_log(path)
 	cv2.namedWindow('img')
 
-	imgs = os.listdir('./test/')
+	imgs = os.listdir(path)
 	imgs = [img for img in imgs if img.endswith('.jpg')]
 	to_end = False
 	for img_path in imgs:		
+		img_path = path + img_path
 		log('Validating img: ' + img_path)
-
-		img_path = './test/' + img_path
 		
 		startTime = datetime.now()
 
-		valid = validate_front(img_path)
+		if mode == 'front':
+			valid = validate_front(img_path)
+		else:
+			valid = validate_back(img_path)
+
 		if valid > 0:
 			cv2.putText(img_to_show, 'Valid', (10,30), cv2.FONT_HERSHEY_SIMPLEX, 1,(0,255,0),2,cv2.LINE_AA) 
 			log('VALID: ' + str(valid))

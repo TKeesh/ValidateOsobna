@@ -1,11 +1,13 @@
 import sys
 
 if __name__ == '__main__':
+	log_path = './log_front.txt'
+	#log_path = './log_back.txt'
 	try:
 		with open(sys.argv[1], 'r') as f:
 			log = f.readlines()
 	except:
-		with open('./log.txt', 'r') as f:
+		with open(log_path, 'r') as f:
 			log = f.readlines()
 	total, valid, not_valid = 0, 0, 0
 	reasons = {}
