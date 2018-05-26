@@ -5,6 +5,10 @@ import os # MOZE SE ZAKOMENTIRAT - samo u mainu
 import config
 
 
+# Globalna varijabla slike - samo za debug
+global img_to_show
+
+
 def log(s, toLog=config.toLog, toPrint=config.toPrint):
 	if toLog:
 		with open('./log.txt', 'a') as f:
@@ -23,7 +27,7 @@ def clear_log():
 #		pattern (grb)
 #	vraca: normalizirani pattern
 def adjust_luma(img, pattern):
-	if img != None:
+	if not img is None:
 		img_yuv = cv2.cvtColor(img, cv2.COLOR_BGR2YUV)
 		minVal, maxVal, minLoc, maxLoc = cv2.minMaxLoc(img_yuv[:,:,0])
 	else:
@@ -67,7 +71,7 @@ def adjust_all(img, pattern):
 #		broj znacajki koje se poklapaju
 def features_matching(img_main):	
 	height, width, channels = img_main.shape	
-	
+
 	# Podrucje slike za detekciju gdje bi trebao biti grb, dosta siroko
 	img_main = img_main[int(height*config.grb_y0):int(height*config.grb_y1), int(width*config.grb_x0):int(width*config.grb_x1)]
 	#img_main = cv2.medianBlur(img_main, 3)
@@ -275,7 +279,8 @@ def validate_front(img_path):
 	# try-except blok osigurava crash features_matching funkcije. To je indikacija da detekcija grba nije uspijela. Isto se koristi za detekciju portreta.
 	try:
 		x_grb, y_grb, score = features_matching(img_main.copy())
-	except:
+	except Exception as e:
+		print( "Error: %s" % e )
 		log('   grb nije detektiran !!')
 		return 0
 	
@@ -331,7 +336,6 @@ def validate_front(img_path):
 		return 0
 
 
-img_to_show = 0
 # Main 
 #	Cita ./test/ direktorij te validira slike u njemu
 if __name__ == '__main__':
