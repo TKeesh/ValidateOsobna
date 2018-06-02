@@ -20,9 +20,9 @@ score = 5
 
 # udaljenost grba i portreta
 dist_l = 100
-dist_h = 155
+dist_h = 160
 angle_l = 0
 angle_h = 40
 
 # prag za minimalnu ostrinu sliku
-sharpness = 80
+sharpness = 70

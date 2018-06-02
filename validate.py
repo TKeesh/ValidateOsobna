@@ -1,13 +1,15 @@
 import cv2
 import numpy as np
+import config
+import json
 from datetime import datetime # MOZE SE ZAKOMENTIRAT - samo u mainu
 import os # MOZE SE ZAKOMENTIRAT - samo u mainu
-import config
 
 
 # Globalna varijabla slike - samo za debug
-global img_to_show
+global img_to_show # MOZE SE ZAKOMENTIRAT - samo u mainu
 global log_path
+global reason
 
 
 def log(s, toLog=config.toLog, toPrint=config.toPrint):
@@ -244,27 +246,33 @@ def angle_between(p1, p2):
 #		0  - nije osobna
 #		-1 - blurrana osobna
 #		>0 - ok sobna, vrijednost = sharpness
-def validate_front(img_path):
-	global img_to_show
+def validate_front_CRO(img_path):
+	global img_to_show # MOZE SE ZAKOMENTIRAT - samo u mainu
+	global reason
+	reason = ''
+
 	# Citanje slike
 	img_main = cv2.imread(img_path)	
 	h, w, c = img_main.shape
 	r = 380 / w
 	img_main = cv2.resize(img_main, (385, int(h * r)))
 	h, w, c = img_main.shape
-	img_to_show = img_main.copy()
+
+	img_to_show = img_main.copy() # MOZE SE ZAKOMENTIRAT - samo u mainu
 	
 	# Detekcija pozicije graba. 
 	# try-except blok osigurava crash features_matching funkcije. To je indikacija da detekcija grba nije uspijela. Isto se koristi za detekciju portreta.
 	try:
 		x_grb, y_grb, score = features_matching(img_main.copy())
 	except Exception as e:
-		print( "Error: %s" % e )
+		#print( "Error: %s" % e )
 		log('   grb nije detektiran !!')
+		log('   Exception: {0}'.format(e))	
+		reason = 'grb nije detektiran'	
 		return 0
 	
 	log('   grb detektiran (x y score): {0} {1} {2}'.format(str(x_grb), str(y_grb), str(score)))
-	cv2.circle(img_to_show, (x_grb,y_grb), 5, 255, -1)
+	cv2.circle(img_to_show, (x_grb,y_grb), 5, 255, -1) # MOZE SE ZAKOMENTIRAT - samo u mainu
 	
 	# Hardkodirani thresholdi pozicije grba i broja dobro spojenih znacajki
 	if (config.x_grb_l < x_grb < config.x_grb_h) and (config.y_grb_l < y_grb < config.y_grb_h) and (score > config.score):
@@ -282,10 +290,11 @@ def validate_front(img_path):
 		
 		if x_face < 0 or y_face < 0:
 			log('   niti jedan dio lica nije detektiran !!')
+			reason = 'niti jedan dio lica nije detektiran'
 			return 0
 
 		log('   portret detektiran (x y): {0} {1}'.format(str(x_face), str(y_face)))
-		cv2.circle(img_to_show, (x_face,y_face), 5, 255, -1)
+		cv2.circle(img_to_show, (x_face,y_face), 5, 255, -1) # MOZE SE ZAKOMENTIRAT - samo u mainu
 		
 		# Racunanje udaljenosti i kuta izmadju grba i portreta
 		grb = np.array((x_grb,y_grb))
@@ -306,12 +315,15 @@ def validate_front(img_path):
 				return sharpness
 			else:
 				log('   previse blurana !!')
+				reason = 'previse blurana'
 				return -1
 		else:
 			log('   udaljenost ili kut odstupaju !!')
+			reason = 'udaljenost ili kut odstupaju'
 			return 0
 	else:
 		log('   grb van dozvoljene pozicije !!')
+		reason = 'grb van dozvoljene pozicije'
 		return 0
 
 
@@ -321,18 +333,46 @@ def validate_front(img_path):
 #		0  - nije osobna
 #		-1 - blurrana osobna
 #		>0 - ok sobna, vrijednost = sharpness
-def validate_back(img_path):
-	global img_to_show
+def validate_back_CRO(img_path):
+	global img_to_show # MOZE SE ZAKOMENTIRAT - samo u mainu
+
 	# Citanje slike
 	img_main = cv2.imread(img_path)	
 	h, w, c = img_main.shape
 	r = 380 / w
 	img_main = cv2.resize(img_main, (385, int(h * r)))
 	h, w, c = img_main.shape
-	img_to_show = img_main.copy()
+
+	img_to_show = img_main.copy() # MOZE SE ZAKOMENTIRAT - samo u mainu
 
 	return 1
 
+
+# Glavna funkcija za pozivanje na serveru
+#	prima:
+#		img_path - lokalna putanju do slike
+#		country  - {'CRO', } case insensitive
+#		side     - {'F', 'FRONT', 'B', 'BACK', ...} case insensitive, bitno je samo prvo slovo
+#	vraca:
+#		0 - nije osobna
+#		1 - ok osobna
+def validate(img_path, country, side):
+	global reason
+
+	country = country.lower()
+	execution = {
+		'cro' : (validate_front_CRO, validate_back_CRO),
+	}
+
+	side = side.lower()
+	front_back = 0 if side[0] == 'f' else 1 
+	valid = execution[country][front_back](img_path)
+
+	json_data = {"Success": 1 if valid > 0 else 0, "ErrorReason": reason}
+	with open('validation.json', 'w') as f:
+		json.dump(json_data, f, ensure_ascii=False)
+
+	return 1 if valid > 0 else 0
 
 
 # Main 
@@ -364,9 +404,12 @@ if __name__ == '__main__':
 		startTime = datetime.now()
 
 		if mode == 'front':
-			valid = validate_front(img_path)
+			# valid = validate_front_CRO(img_path)
+			valid = validate(img_path, 'CRO', 'front')
 		else:
-			valid = validate_back(img_path)
+			# valid = validate_back_CRO(img_path)
+			valid = validate(img_path, 'CRO', 'back')
+
 
 		if valid > 0:
 			cv2.putText(img_to_show, 'Valid', (10,30), cv2.FONT_HERSHEY_SIMPLEX, 1,(0,255,0),2,cv2.LINE_AA) 
