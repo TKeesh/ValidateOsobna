@@ -161,7 +161,6 @@ def detect_right_eye(img_main):
 
 	x0, y0, area = -1, -1, 1500
 	for (x,y,w,h) in faces:
-		print ('TEST: ', w*h)
 		if w*h < area:
 			area = w*h
 			x0, y0 = x+int(width*0.2)+int(w/2), y+int(height*0.2)+int(h/2)
@@ -368,9 +367,8 @@ def validate(img_path, country, side):
 	front_back = 0 if side[0] == 'f' else 1 
 	valid = execution[country][front_back](img_path)
 
-	json_data = {"Success": 1 if valid > 0 else 0, "ErrorReason": reason}
-	with open('validation.json', 'w') as f:
-		json.dump(json_data, f, ensure_ascii=False)
+	json_data = {"Success": 1 if valid > 0 else 0, "ErrorReason": reason}	
+	print (json.dumps(json_data, ensure_ascii=True, indent=None, sort_keys=True))
 
 	return 1 if valid > 0 else 0
 

@@ -2,7 +2,7 @@
 toLog = True
 
 # ispis u konzolu
-toPrint = True
+toPrint = False
 
 # podrucje detekcije grba, u postocima. (0, 0) - je gore lijevo
 grb_y0 = 0
