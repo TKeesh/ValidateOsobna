@@ -1,0 +1,176 @@
+import cv2
+import numpy as np
+from os.path import exists
+
+
+global log_path
+
+# logiranje u ./log.txt
+toLog = True
+# ispis u konzolu
+toPrint = False
+
+def log(s, toLog=toLog, toPrint=toPrint):
+	global log_path
+	if toLog:
+		with open(log_path, 'a') as f:
+			f.write(s + '\n')
+	if toPrint:
+		print (s)
+
+def init_log(path):
+	global log_path
+	log_path = path
+	if not exists(log_path): open(log_path, 'w').close()
+
+def clear_log():
+	global log_path
+	open(log_path, 'w').close()
+
+
+# Kut izmedju dvije tocke i y osi
+def angle_between(p1, p2):
+    ang1 = np.arctan2(*p1[::-1])
+    ang2 = np.arctan2(*p2[::-1])
+    return np.rad2deg((ang1 - ang2) % (2 * np.pi))
+
+
+# Funkcija za normalizaciju luminosity-a, patterna (grb) na temlju slike
+#	prima: 
+#		sliku ili None
+#		pattern (grb)
+#	vraca: normalizirani pattern
+def adjust_luma(img, pattern):
+	if not img is None:
+		img_yuv = cv2.cvtColor(img, cv2.COLOR_BGR2YUV)
+		minVal, maxVal, minLoc, maxLoc = cv2.minMaxLoc(img_yuv[:,:,0])
+	else:
+		minVal, maxVal = 0, 255
+
+	pattern_yuv = cv2.cvtColor(pattern, cv2.COLOR_BGR2YUV)
+	y, u, v = cv2.split(pattern_yuv)
+	cv2.normalize(y, y, minVal, maxVal, cv2.NORM_MINMAX)
+	pattern = cv2.cvtColor(cv2.merge((y,u,v)), cv2.COLOR_YUV2BGR)
+
+	return pattern
+
+
+# Slicno kao gore samo sto normalizira sve kanale slike
+#	radi za bilo koji prostor slika dubine 3
+def adjust_all(img, pattern):
+	if img != None:
+		img_yuv = cv2.cvtColor(img, cv2.COLOR_BGR2YUV)
+		y0, y1, minLoc, maxLoc = cv2.minMaxLoc(img_yuv[:,:,0])
+		u0, u1, minLoc, maxLoc = cv2.minMaxLoc(img_yuv[:,:,1])
+		v0, v1, minLoc, maxLoc = cv2.minMaxLoc(img_yuv[:,:,2])
+	else:
+		y0, y1 = 0, 255
+		u0, u1 = 0, 255
+		v0, v1 = 0, 255
+
+	pattern_yuv = cv2.cvtColor(pattern, cv2.COLOR_BGR2YUV)
+	y, u, v = cv2.split(pattern_yuv)
+	cv2.normalize(y, y, y0, y1, cv2.NORM_MINMAX)
+	cv2.normalize(u, u, u0, u1, cv2.NORM_MINMAX)
+	cv2.normalize(v, v, v0, v1, cv2.NORM_MINMAX)
+	pattern = cv2.cvtColor(cv2.merge((y,u,v)), cv2.COLOR_YUV2BGR)
+
+	return pattern
+
+
+# Detekcija nosa
+def detect_nose(img_main):
+	height, width, channels = img_main.shape
+	img_gray = cv2.cvtColor(img_main[int(height*0.2):int(height*0.8), int(width*0.1):int(width*0.7)], cv2.COLOR_BGR2GRAY)
+	clahe = cv2.createCLAHE(clipLimit=1.5, tileGridSize=(6,6))
+	cl1 = clahe.apply(img_gray)
+
+	face_cascade = cv2.CascadeClassifier('./haarcascades/haarcascade_mcs_nose.xml')
+	faces = face_cascade.detectMultiScale(cl1, 1.1, 4)
+
+	x0, y0, area = -1, -1, 2000
+	for (x,y,w,h) in faces:
+		if w*h < area:
+			area = w*h
+			x0, y0 = x+int(width*0.1)+int(w/2), y+int(height*0.2)+int(h/2)
+		#cv2.rectangle(img_gray,(x,y),(x+w,y+h),(255,0,0),2)
+	#cv2.circle(img_main, (x0,y0), 5, 255, -1)
+	#cv2.imshow('nose', img_gray)
+
+	return x0, y0, area
+
+
+# Detekcija desnog oka
+#	nazalost nekad detektira lijevo oko
+def detect_right_eye(img_main):
+	height, width, channels = img_main.shape
+	img_main = img_main[int(height*0.2):int(height*0.7), int(width*0.2):int(width*0.9)]
+	face_cascade = cv2.CascadeClassifier('./haarcascades/haarcascade_mcs_righteye.xml')
+	faces = face_cascade.detectMultiScale(img_main, 1.1, 4)
+
+	x0, y0, area = -1, -1, 1500
+	for (x,y,w,h) in faces:
+		if w*h < area:
+			area = w*h
+			x0, y0 = x+int(width*0.2)+int(w/2), y+int(height*0.2)+int(h/2)
+		cv2.rectangle(img_main,(x,y),(x+w,y+h),(255,0,0),2)
+	#cv2.circle(img_main, (x0,y0), 5, 255, -1)
+	#cv2.imshow('eye', img_main)
+
+	return x0, y0, area
+
+
+# Detekcija portreta
+#	prima:
+#		sliku
+#		(x, y) - grba
+#	vraca: poziciju centra portreta
+def detect_face(img_main, x_grb, y_grb):
+	height, width, channels = img_main.shape
+
+	# Na temelju pozicije grba (x, y) uzima podrucje gdje bi trebao biti portret 
+	img_main = img_main[y_grb+40:int(height*0.97), x_grb-10:int(width*0.97)]
+	
+	# Normalizira luminosity (0 - 255), moze pomoci u nekim slucajevima, za sada se cini da nije potrebno
+	#img_main = adjust_luma(None, img_main)
+	#img_gray = cv2.GaussianBlur(img_gray,(3,3),0)
+	#clahe!?!
+
+	# Detekcija portreta pomocu haarcascade naucenih znacajki - neovisno o orijentaciji, kontrastu, velicini...
+	face_cascade = cv2.CascadeClassifier('./haarcascades/haarcascade_frontalface_alt.xml')
+	faces = face_cascade.detectMultiScale(img_main, 1.1, 2)
+	x0, y0, area = -1, -1, -1
+	for (x,y,w,h) in faces:
+		if w*h > area:
+			area = w*h
+			x0, y0 = x+(x_grb-10)+int(w/2), y+(y_grb+40)+int(h/2)
+		# cv2.rectangle(img_main,(x,y),(x+w,y+h),(255,0,0),2)
+	#cv2.imshow('faces', cl1)
+	if len(faces) > 1:
+		log( '      broj pronadjenih portreta: {0}; uzimam najveci kao relevantan'.format(str(len(faces))) )
+
+	# Vraca najvece detektirano lice na ulaznom podrucju. Gotovo uvijek ce biti 0 ili 1 detektirano, ali za svaki slucaj
+	return x0, y0
+
+
+def detect_MRZ(img_main):
+	rectKernel = cv2.getStructuringElement(cv2.MORPH_RECT, (13, 5))
+	sqKernel = cv2.getStructuringElement(cv2.MORPH_RECT, (21, 21))
+
+	img_gray = cv2.cvtColor(img_main, cv2.COLOR_BGR2GRAY)
+	img_gray = cv2.GaussianBlur(img_gray, (3, 3), 0)
+	
+	equ_main = cv2.equalizeHist(img_gray)
+	clahe = cv2.createCLAHE(clipLimit=1.5, tileGridSize=(8,8))
+	cl1 = clahe.apply(img_gray)
+
+	blackhat = cv2.morphologyEx(cl1, cv2.MORPH_BLACKHAT, rectKernel)
+	cv2.imshow('blackhat', blackhat)
+
+	gradX = cv2.Sobel(blackhat, ddepth=cv2.CV_32F, dx=1, dy=0, ksize=-1)
+	gradX = np.absolute(gradX)
+	(minVal, maxVal) = (np.min(gradX), np.max(gradX))
+	gradX = (255 * ((gradX - minVal) / (maxVal - minVal))).astype("uint8")
+	cv2.imshow('gradX', gradX)
+
+	return
