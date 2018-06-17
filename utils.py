@@ -8,7 +8,7 @@ global log_path
 # logiranje u ./log.txt
 toLog = True
 # ispis u konzolu
-toPrint = False
+toPrint = True
 
 def log(s, toLog=toLog, toPrint=toPrint):
 	global log_path
@@ -113,7 +113,7 @@ def detect_right_eye(img_main):
 		if w*h < area:
 			area = w*h
 			x0, y0 = x+int(width*0.2)+int(w/2), y+int(height*0.2)+int(h/2)
-		cv2.rectangle(img_main,(x,y),(x+w,y+h),(255,0,0),2)
+		#cv2.rectangle(img_main,(x,y),(x+w,y+h),(255,0,0),2)
 	#cv2.circle(img_main, (x0,y0), 5, 255, -1)
 	#cv2.imshow('eye', img_main)
 
@@ -154,8 +154,9 @@ def detect_face(img_main, x_grb, y_grb):
 
 
 def detect_MRZ(img_main):
-	rectKernel = cv2.getStructuringElement(cv2.MORPH_RECT, (13, 5))
-	sqKernel = cv2.getStructuringElement(cv2.MORPH_RECT, (21, 21))
+	h, w, c = img_main.shape
+	rectKernel = cv2.getStructuringElement(cv2.MORPH_RECT, (9, 4)) #9,4
+	sqKernel = cv2.getStructuringElement(cv2.MORPH_RECT, (5, 13)) #5,13
 
 	img_gray = cv2.cvtColor(img_main, cv2.COLOR_BGR2GRAY)
 	img_gray = cv2.GaussianBlur(img_gray, (3, 3), 0)
@@ -165,12 +166,53 @@ def detect_MRZ(img_main):
 	cl1 = clahe.apply(img_gray)
 
 	blackhat = cv2.morphologyEx(cl1, cv2.MORPH_BLACKHAT, rectKernel)
-	cv2.imshow('blackhat', blackhat)
+	#cv2.imshow('blackhat', blackhat)
 
 	gradX = cv2.Sobel(blackhat, ddepth=cv2.CV_32F, dx=1, dy=0, ksize=-1)
 	gradX = np.absolute(gradX)
 	(minVal, maxVal) = (np.min(gradX), np.max(gradX))
 	gradX = (255 * ((gradX - minVal) / (maxVal - minVal))).astype("uint8")
-	cv2.imshow('gradX', gradX)
+	#cv2.imshow('gradX', gradX)
 
-	return
+	gradX = cv2.morphologyEx(gradX, cv2.MORPH_CLOSE, rectKernel)
+	#cv2.imshow('gradx0', gradX)
+	thresh = cv2.threshold(gradX, 0, 255, cv2.THRESH_BINARY | cv2.THRESH_OTSU)[1]
+	#cv2.imshow('thresh1', thresh)
+
+	thresh = cv2.morphologyEx(thresh, cv2.MORPH_CLOSE, sqKernel)
+	#cv2.imshow('thresh2', thresh)
+	thresh = cv2.erode(thresh, None, iterations=4)
+	#cv2.imshow('thresh3', thresh)
+
+	p = int(w * 0.05)
+	thresh[:, 0:p] = 0
+	#cv2.imshow('thresh4', thresh)
+	thresh[:, w - p:] = 0
+	#cv2.imshow('thresh', thresh)
+
+	ret, x0, y0, w0, h0 = 0, 0, 0, 0, 0
+	cnts = cv2.findContours(thresh.copy(), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)[-2]
+	cnts = sorted(cnts, key=cv2.contourArea, reverse=True)
+	for c in cnts:
+		(x0, y0, w0, h0) = cv2.boundingRect(c)
+		ar = w0 / float(h0)
+		crWidth = w0 / float(w)
+
+		#print ('ar, crWidth: ', ar, crWidth)
+		if ar > 5 and crWidth > 0.60:
+			pX = int((x0 + w0) * 0.03)
+			pY = int((y0 + h0) * 0.03)
+			(x0, y0) = (x0 - pX, y0 - pY)
+			(w0, h0) = (w0 + (pX * 2), h0 + (pY * 2))
+
+			roi = img_main[y0:y0 + h0, x0:x0 + w0].copy()
+			cv2.rectangle(img_main, (x0, y0), (x0 + w0, y0 + h0), (0, 255, 0), 2)
+
+			ret = 1
+			break
+
+	#cv2.imshow('main', img_main)
+	#try:cv2.imshow('roi', roi)
+	#except: pass
+
+	return ret, x0, y0, w0, h0
