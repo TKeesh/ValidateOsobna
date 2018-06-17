@@ -1,8 +1,10 @@
 import sys
+from test import country, side
 
 if __name__ == '__main__':
-	log_path = './log_front.txt'
-	#log_path = './log_back.txt'
+
+	log_path = './logs/log_' + country.upper() + '_' + side + '.txt'
+
 	try:
 		with open(sys.argv[1], 'r') as f:
 			log = f.readlines()

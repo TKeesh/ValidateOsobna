@@ -1,5 +1,5 @@
 from utils import *
-import config_CRO as config
+import config_CRO as cfg
 
 
 # Detekcija grba na temelju ORB znacajki
@@ -11,10 +11,10 @@ def features_matching(img_main):
 	height, width, channels = img_main.shape	
 
 	# Podrucje slike za detekciju gdje bi trebao biti grb, dosta siroko
-	img_main = img_main[int(height*config.grb_y0):int(height*config.grb_y1), int(width*config.grb_x0):int(width*config.grb_x1)]
+	img_main = img_main[int(height*cfg.grb_y0):int(height*cfg.grb_y1), int(width*cfg.grb_x0):int(width*cfg.grb_x1)]
 	# sharpness = cv2.Laplacian(img_main, cv2.CV_64F).var()
 	# print(sharpness)
-	cv2.imshow('grb', img_main)
+	#cv2.imshow('grb', img_main)
 	#img_main = cv2.medianBlur(img_main, 3)
 	#img_main = cv2.GaussianBlur(img_main,(3,3),0)
 
@@ -39,8 +39,8 @@ def features_matching(img_main):
 	#cl2 = cv2.GaussianBlur(cl2,(3,3),0)
 	#img_grb = cv2.GaussianBlur(img_grb,(7,7),0)
 
-	cv2.imshow('t1', cl1)
-	cv2.imshow('t2', cl2)
+	#cv2.imshow('t1', cl1)
+	#cv2.imshow('t2', cl2)
 
 	# Racunanje znacajki nad izrezanom maskiranom slikom i maskiranom grbu
 	orb = cv2.ORB_create()
@@ -106,10 +106,10 @@ def validate_front_CRO(img_path):
 	img_main = cv2.imread(img_path)	
 	h, w, c = img_main.shape
 	r = 380 / w
-	img_main = cv2.resize(img_main, (385, int(h * r)))
+	img_main = cv2.resize(img_main, (380, int(h * r)))
 	h, w, c = img_main.shape
 
-	img_to_show = img_main.copy() # MOZE SE ZAKOMENTIRAT - samo u mainu
+	#img_to_show = img_main.copy() # MOZE SE ZAKOMENTIRAT - samo u mainu
 	
 	# Detekcija pozicije graba. 
 	# try-except blok osigurava crash features_matching funkcije. To je indikacija da detekcija grba nije uspijela. Isto se koristi za detekciju portreta.
@@ -122,11 +122,11 @@ def validate_front_CRO(img_path):
 		return 0, 'grb nije detektiran'
 	
 	log('   grb detektiran (x y score): {0} {1} {2}'.format(str(x_grb), str(y_grb), str(score)))
-	cv2.circle(img_to_show, (x_grb,y_grb), 5, 255, -1) # MOZE SE ZAKOMENTIRAT - samo u mainu
-	cv2.imshow('img', img_to_show)
+	#cv2.circle(img_to_show, (x_grb,y_grb), 5, 255, -1) # MOZE SE ZAKOMENTIRAT - samo u mainu
+	#cv2.imshow('img', img_to_show) # MOZE SE ZAKOMENTIRAT - samo u mainu
 	
 	# Hardkodirani thresholdi pozicije grba i broja dobro spojenih znacajki
-	if (config.x_grb_l < x_grb < config.x_grb_h) and (config.y_grb_l < y_grb < config.y_grb_h) and (score > config.score):
+	if (cfg.x_grb_l < x_grb < cfg.x_grb_h) and (cfg.y_grb_l < y_grb < cfg.y_grb_h) and (score > cfg.score):
 		log('   grb unutar dozvoljene pozicije')
 		
 		# Ako je detekcija unutar threshola idemo na detekciju portreta. try-except kao i gore.
@@ -144,8 +144,8 @@ def validate_front_CRO(img_path):
 			return 0, 'niti jedan dio lica nije detektiran'
 
 		log('   portret detektiran (x y): {0} {1}'.format(str(x_face), str(y_face)))
-		cv2.circle(img_to_show, (x_face,y_face), 5, 255, -1) # MOZE SE ZAKOMENTIRAT - samo u mainu
-		cv2.imshow('img', img_to_show)
+		#cv2.circle(img_to_show, (x_face,y_face), 5, 255, -1) # MOZE SE ZAKOMENTIRAT - samo u mainu
+		#cv2.imshow('img', img_to_show) # MOZE SE ZAKOMENTIRAT - samo u mainu
 		
 		# Racunanje udaljenosti i kuta izmadju grba i portreta
 		grb = np.array((x_grb,y_grb))
@@ -156,13 +156,13 @@ def validate_front_CRO(img_path):
 		log('   kut grba i portreta i y-osi: {0}'.format(str(angle)))
 
 		# Hardkodirani thresholdi za provjeru udaljenosti i kuta grba i portreta
-		if (config.dist_l < dist < config.dist_h) and (config.angle_l < angle < config.angle_h):
+		if (cfg.dist_l < dist < cfg.dist_h) and (cfg.angle_l < angle < cfg.angle_h):
 			log('   udaljenost i kut unutar dozvoljenih vrijednosti')									
 
 			# Jednostavno racunanje sharpness slike. Hardkoridan threshold za provjeru.
 			sharpness = cv2.Laplacian(img_main[int(h*0.05):int(h*0.95), int(w*0.05):int(w*0.95)], cv2.CV_64F).var()
 			log('   sharpness: {0}'.format(str(sharpness)))		
-			if sharpness > config.sharpness:
+			if sharpness > cfg.sharpness:
 				return sharpness, ''
 			else:
 				log('   previse blurana !!')
@@ -182,17 +182,24 @@ def validate_front_CRO(img_path):
 #		-1 - blurrana osobna
 #		>0 - ok sobna, vrijednost = sharpness
 def validate_back_CRO(img_path):
-	global img_to_show # MOZE SE ZAKOMENTIRAT - samo u mainu
-
 	# Citanje slike
 	img_main = cv2.imread(img_path)	
 	h, w, c = img_main.shape
 	r = 380 / w
-	img_main = cv2.resize(img_main, (385, int(h * r)))
+	img_main = cv2.resize(img_main, (380, int(h * r)))
 	h, w, c = img_main.shape
 
-	img_to_show = img_main.copy() # MOZE SE ZAKOMENTIRAT - samo u mainu
+	ret, x0, y0, w0, h0 = detect_MRZ(img_main.copy())
 
-	detect_MRZ(img_main.copy())
+	if ret:
+		# if pozicije
 
-	return 1, ''
+		sharpness = cv2.Laplacian(img_main[int(h*0.05):int(h*0.95), int(w*0.05):int(w*0.95)], cv2.CV_64F).var()
+		if sharpness > cfg.sharpness:
+			return sharpness, ''
+		else:
+			log('   previse blurana !!')
+			return -1, 'previse blurana'
+	else:
+		log('   MRZ nije detektirana !!')
+		return 0, 'MRZ nije detektirana'
