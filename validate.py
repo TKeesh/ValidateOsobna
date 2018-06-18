@@ -8,7 +8,7 @@ from utils import log, init_log, clear_log
 # Glavna funkcija za pozivanje na serveru
 #	prima:
 #		img_path - lokalna putanju do slike
-#		country  - {'CRO', } case insensitive
+#		country  - {'HR', } case insensitive
 #		side     - {'F', 'FRONT', 'B', 'BACK', ...} case insensitive, bitno je samo prvo slovo
 #	vraca:
 #		0 - nije osobna
@@ -17,10 +17,10 @@ def validate(img_path, country, side):
 	startTime = datetime.now()
 	log('Validating img: ' + img_path)
 
-	from validate_CRO import validate_front_CRO, validate_back_CRO
+	from validate_HR import validate_front_HR, validate_back_HR
 
 	execution = {
-		'cro' : (validate_front_CRO, validate_back_CRO),
+		'hr' : (validate_front_HR, validate_back_HR),
 	}
 
 	front_back = 0 if side[0] == 'f' else 1 

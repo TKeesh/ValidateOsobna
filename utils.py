@@ -8,7 +8,7 @@ global log_path
 # logiranje u ./log.txt
 toLog = True
 # ispis u konzolu
-toPrint = True
+toPrint = False
 
 def log(s, toLog=toLog, toPrint=toPrint):
 	global log_path

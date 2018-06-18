@@ -8,7 +8,7 @@ from datetime import datetime
 from validate import *
 
 
-country = 'CRO'
+country = 'HR'
 # Side: front or back
 side = 'back'
 
@@ -33,7 +33,7 @@ if __name__ == '__main__':
 		
 		startTime = datetime.now()
 
-		valid = validate(img_path, 'cro', side)
+		valid = validate(img_path, 'hr', side)
 		
 		if not to_end or not valid:
 			inKey = cv2.waitKey(0) & 0xFF

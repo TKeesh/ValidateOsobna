@@ -1,5 +1,5 @@
 from utils import *
-import config_CRO as cfg
+import config_HR as cfg
 
 
 # Detekcija grba na temelju ORB znacajki
@@ -24,7 +24,7 @@ def features_matching(img_main):
 	cl1 = clahe.apply(img_gray)
 
 	# Citanje patterna (grb). Prilagodjavanje luminosity-a na temelju sliku. Denoisanje
-	img_grb = cv2.imread('./templates/grb_CRO.jpg')
+	img_grb = cv2.imread('./templates/grb_HR.jpg')
 
 	img_grb = adjust_luma(img_main, img_grb)
 	# sharpness = cv2.Laplacian(img_grb, cv2.CV_64F).var()
@@ -101,7 +101,7 @@ def detect_face_parts(img_main, x_grb, y_grb):
 #		0  - nije osobna
 #		-1 - blurrana osobna
 #		>0 - ok sobna, vrijednost = sharpness
-def validate_front_CRO(img_path):
+def validate_front_HR(img_path):
 	# Citanje slike
 	img_main = cv2.imread(img_path)	
 	h, w, c = img_main.shape
@@ -181,7 +181,7 @@ def validate_front_CRO(img_path):
 #		0  - nije osobna
 #		-1 - blurrana osobna
 #		>0 - ok sobna, vrijednost = sharpness
-def validate_back_CRO(img_path):
+def validate_back_HR(img_path):
 	# Citanje slike
 	img_main = cv2.imread(img_path)	
 	h, w, c = img_main.shape
