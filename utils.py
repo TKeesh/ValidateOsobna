@@ -8,7 +8,7 @@ global log_path
 # logiranje u ./log.txt
 toLog = True
 # ispis u konzolu
-toPrint = False
+toPrint = True
 
 def log(s, toLog=toLog, toPrint=toPrint):
 	global log_path
@@ -81,23 +81,28 @@ def adjust_all(img, pattern):
 # Detekcija nosa
 def detect_nose(img_main):
 	height, width, channels = img_main.shape
-	img_gray = cv2.cvtColor(img_main[int(height*0.2):int(height*0.8), int(width*0.1):int(width*0.7)], cv2.COLOR_BGR2GRAY)
+	img_main = img_main[int(height*0.2):int(height*0.9), int(width*0.3):int(width*0.9)]
+	img_gray = cv2.cvtColor(img_main, cv2.COLOR_BGR2GRAY)
 	clahe = cv2.createCLAHE(clipLimit=1.5, tileGridSize=(6,6))
 	cl1 = clahe.apply(img_gray)
 
 	face_cascade = cv2.CascadeClassifier('./haarcascades/haarcascade_mcs_nose.xml')
 	faces = face_cascade.detectMultiScale(cl1, 1.1, 4)
 
-	x0, y0, area = -1, -1, 2000
-	for (x,y,w,h) in faces:
-		if w*h < area:
-			area = w*h
-			x0, y0 = x+int(width*0.1)+int(w/2), y+int(height*0.2)+int(h/2)
-		#cv2.rectangle(img_gray,(x,y),(x+w,y+h),(255,0,0),2)
-	#cv2.circle(img_main, (x0,y0), 5, 255, -1)
-	#cv2.imshow('nose', img_gray)
+	faces = sorted(faces, key=lambda x: (x[2]*x[3]))
 
-	return x0, y0, area
+	# x0, y0, area = -1, -1, 2000
+	# for (x,y,w,h) in faces:
+	# 	if w*h < area:
+	# 		area = w*h
+	# 		x0, y0 = x+int(width*0.3)+int(w/2), y+int(height*0.2)+int(h/2)
+	# 	cv2.rectangle(img_gray,(x,y),(x+w,y+h),(255,0,0),2)
+	#cv2.circle(img_main, (x0,y0), 5, 255, -1)
+	# cv2.imshow('nose', img_gray)
+
+	x, y, w, h = faces[0]
+
+	return x+int(width*0.3)+int(w/2), y+int(height*0.2)+int(h/2), w*h
 
 
 # Detekcija desnog oka
@@ -108,16 +113,21 @@ def detect_right_eye(img_main):
 	face_cascade = cv2.CascadeClassifier('./haarcascades/haarcascade_mcs_righteye.xml')
 	faces = face_cascade.detectMultiScale(img_main, 1.1, 4)
 
-	x0, y0, area = -1, -1, 1500
-	for (x,y,w,h) in faces:
-		if w*h < area:
-			area = w*h
-			x0, y0 = x+int(width*0.2)+int(w/2), y+int(height*0.2)+int(h/2)
-		#cv2.rectangle(img_main,(x,y),(x+w,y+h),(255,0,0),2)
-	#cv2.circle(img_main, (x0,y0), 5, 255, -1)
-	#cv2.imshow('eye', img_main)
+	faces = sorted(faces, key=lambda x: (x[0], x[2]*x[3]))
 
-	return x0, y0, area
+	#x0, y0, area = -1, -1, 1500
+	# for (x,y,w,h) in faces:
+	# 	if w*h < area:
+	# 		area = w*h
+	# 		x0, y0 = x+int(width*0.2)+int(w/2), y+int(height*0.2)+int(h/2)
+	# 	cv2.rectangle(img_main,(x,y),(x+w,y+h),(255,0,0),2)
+	#cv2.circle(img_main, (x0,y0), 5, 255, -1)
+
+	x, y, w, h = faces[-1]
+	# cv2.rectangle(img_main,(x0,y0),(x0+w,y0+h),(255,0,0),2)
+	# cv2.imshow('eye', img_main)
+
+	return x+int(width*0.2)+int(w/2), y+int(height*0.2)+int(h/2), w*h
 
 
 # Detekcija portreta
@@ -125,11 +135,13 @@ def detect_right_eye(img_main):
 #		sliku
 #		(x, y) - grba
 #	vraca: poziciju centra portreta
-def detect_face(img_main, x_grb, y_grb):
+def detect_face(img_main):
 	height, width, channels = img_main.shape
+	x_grb, y_grb = int(width * 0.4), 0
 
 	# Na temelju pozicije grba (x, y) uzima podrucje gdje bi trebao biti portret 
 	img_main = img_main[y_grb+40:int(height*0.97), x_grb-10:int(width*0.97)]
+	#cv2.imshow('im', img_main)
 	
 	# Normalizira luminosity (0 - 255), moze pomoci u nekim slucajevima, za sada se cini da nije potrebno
 	#img_main = adjust_luma(None, img_main)
@@ -195,18 +207,37 @@ def detect_MRZ(img_main):
 	cnts = sorted(cnts, key=cv2.contourArea, reverse=True)
 	for c in cnts:
 		(x0, y0, w0, h0) = cv2.boundingRect(c)
+		h_cpy = h0
 		ar = w0 / float(h0)
 		crWidth = w0 / float(w)
 
-		#print ('ar, crWidth: ', ar, crWidth)
 		if ar > 5 and crWidth > 0.60:
+			rect = cv2.minAreaRect(c)
+			om = rect[-1]
+			if om*-1 > 45:
+				om = 90 + rect[-1]
+			else:
+				om *= -1
+			om = 1 - abs(om)*0.1
+			#print (om)
+
+			approx = cv2.approxPolyDP(c,5,True)
+			approx = sorted(approx, key=lambda x: (x[0][0], x[0][1]))
+			w_trans = abs(approx[1][0][0] - approx[-2][0][0])
+			#print('w: ', w_trans, w0, w0-w_trans)
+			fi = 1 - (w0-w_trans)*0.01
+			#print ('fi: ', fi**2)
+
 			pX = int((x0 + w0) * 0.03)
 			pY = int((y0 + h0) * 0.03)
 			(x0, y0) = (x0 - pX, y0 - pY)
 			(w0, h0) = (w0 + (pX * 2), h0 + (pY * 2))
 
-			roi = img_main[y0:y0 + h0, x0:x0 + w0].copy()
-			cv2.rectangle(img_main, (x0, y0), (x0 + w0, y0 + h0), (0, 255, 0), 2)
+			#roi = img_main[y0:y0 + h0, x0:x0 + w0].copy()
+			#cv2.rectangle(img_main, (x0, y0), (x0 + w0, y0 + h0), (0, 255, 0), 2)
+
+			#cv2.rectangle(img_main, (x0, y0-int(3.35*h_cpy * om * fi)), (x0 + w0, y0 + h0), (0, 255, 0), 2)
+			x0, y0, w0, h0 = x0, y0-int(3.35*h_cpy * om * fi), w0, h0
 
 			ret = 1
 			break

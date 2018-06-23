@@ -27,6 +27,7 @@ if __name__ == '__main__':
 
 	imgs = os.listdir(path)
 	imgs = [img for img in imgs if img.lower().endswith('.jpg')]
+	imgs.sort()
 	to_end = False
 	for img_path in imgs:		
 		img_path = path + img_path

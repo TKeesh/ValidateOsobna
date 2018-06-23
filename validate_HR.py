@@ -69,8 +69,9 @@ def features_matching(img_main):
 
 # Detekcija dijelova lica
 #	poziva se kada portret nije detektiran
-def detect_face_parts(img_main, x_grb, y_grb):	
+def detect_face_parts(img_main):	
 	height, width, channels = img_main.shape
+	x_grb, y_grb = int(width * 0.4), 0
 	img_main = img_main[y_grb+40:int(height*0.97), x_grb-10:int(width*0.97)]
 
 	try: x_nose, y_nose, area_nose = detect_nose(img_main.copy())
@@ -109,70 +110,60 @@ def validate_front_HR(img_path):
 	img_main = cv2.resize(img_main, (380, int(h * r)))
 	h, w, c = img_main.shape
 
-	#img_to_show = img_main.copy() # MOZE SE ZAKOMENTIRAT - samo u mainu
-	
-	# Detekcija pozicije graba. 
-	# try-except blok osigurava crash features_matching funkcije. To je indikacija da detekcija grba nije uspijela. Isto se koristi za detekciju portreta.
+	# img_to_show = img_main.copy() # MOZE SE ZAKOMENTIRAT - samo u mainu
+	# cv2.rectangle(img_to_show,(int(w*cfg.f_w),int(h*cfg.f_h)),(w,h),(255,0,0),2)
+	# cv2.imshow('img', img_to_show) # MOZE SE ZAKOMENTIRAT - samo u mainu
+
 	try:
-		x_grb, y_grb, score = features_matching(img_main.copy())
-	except Exception as e:
-		#print( "Error: %s" % e )
-		log('   grb nije detektiran !!')
-		log('   Exception: {0}'.format(e))
-		return 0, 'grb nije detektiran'
-	
-	log('   grb detektiran (x y score): {0} {1} {2}'.format(str(x_grb), str(y_grb), str(score)))
-	#cv2.circle(img_to_show, (x_grb,y_grb), 5, 255, -1) # MOZE SE ZAKOMENTIRAT - samo u mainu
-	#cv2.imshow('img', img_to_show) # MOZE SE ZAKOMENTIRAT - samo u mainu
-	
-	# Hardkodirani thresholdi pozicije grba i broja dobro spojenih znacajki
-	if (cfg.x_grb_l < x_grb < cfg.x_grb_h) and (cfg.y_grb_l < y_grb < cfg.y_grb_h) and (score > cfg.score):
-		log('   grb unutar dozvoljene pozicije')
-		
-		# Ako je detekcija unutar threshola idemo na detekciju portreta. try-except kao i gore.
+		x_face, y_face = detect_face(img_main.copy())
+	except:
+		x_face, y_face = -1, -1
+
+	if x_face < 0 or y_face < 0:
+		log('   portret nije detektiran')
 		try:
-			x_face, y_face = detect_face(img_main.copy(), x_grb, y_grb)
+			x_face, y_face = detect_face_parts(img_main.copy())
 		except:
 			x_face, y_face = -1, -1
 
-		if x_face < 0 or y_face < 0:
-			log('   portret nije detektiran')
-			x_face, y_face = detect_face_parts(img_main.copy(), x_grb, y_grb)
-		
-		if x_face < 0 or y_face < 0:
-			log('   niti jedan dio lica nije detektiran !!')
-			return 0, 'niti jedan dio lica nije detektiran'
+	if x_face < w * cfg.f_w or y_face < h * cfg.f_h:
+		log('   portret van dozvoljene pozicije (x y): {0} {1}'.format(x_face, y_face))
+		x_face, y_face = -1, -1
 
-		log('   portret detektiran (x y): {0} {1}'.format(str(x_face), str(y_face)))
-		#cv2.circle(img_to_show, (x_face,y_face), 5, 255, -1) # MOZE SE ZAKOMENTIRAT - samo u mainu
-		#cv2.imshow('img', img_to_show) # MOZE SE ZAKOMENTIRAT - samo u mainu
-		
-		# Racunanje udaljenosti i kuta izmadju grba i portreta
-		grb = np.array((x_grb,y_grb))
-		face = np.array((x_face,y_face))
-		dist = np.linalg.norm(grb - face)
-		angle = angle_between(face, grb)
-		log('   udaljenost grba i portreta: {0}'.format(str(dist)))
-		log('   kut grba i portreta i y-osi: {0}'.format(str(angle)))
+	if x_face < 0 or y_face < 0:
+		# Detekcija pozicije graba. 
+		# try-except blok osigurava crash features_matching funkcije. To je indikacija da detekcija grba nije uspijela. Isto se koristi za detekciju portreta.	
+		try:
+			x_grb, y_grb, score = features_matching(img_main.copy())
+		except Exception as e:
+			#print( "Error: %s" % e )
+			log('   grb nije detektiran !!')
+			log('   Exception: {0}'.format(e))
+			return 0, 'grb nije detektiran'
 
-		# Hardkodirani thresholdi za provjeru udaljenosti i kuta grba i portreta
-		if (cfg.dist_l < dist < cfg.dist_h) and (cfg.angle_l < angle < cfg.angle_h):
-			log('   udaljenost i kut unutar dozvoljenih vrijednosti')									
+		log('   grb detektiran (x y score): {0} {1} {2}'.format(str(x_grb), str(y_grb), str(score)))
+		# cv2.circle(img_to_show, (x_grb,y_grb), 5, 255, -1) # MOZE SE ZAKOMENTIRAT - samo u mainu
+		# cv2.imshow('img', img_to_show) # MOZE SE ZAKOMENTIRAT - samo u mainu
 
-			# Jednostavno racunanje sharpness slike. Hardkoridan threshold za provjeru.
-			sharpness = cv2.Laplacian(img_main[int(h*0.05):int(h*0.95), int(w*0.05):int(w*0.95)], cv2.CV_64F).var()
-			log('   sharpness: {0}'.format(str(sharpness)))		
-			if sharpness > cfg.sharpness:
-				return sharpness, ''
-			else:
-				log('   previse blurana !!')
-				return -1, 'previse blurana'
+		# Hardkodirani thresholdi pozicije grba i broja dobro spojenih znacajki
+		if (cfg.x_grb_l < x_grb < cfg.x_grb_h) and (cfg.y_grb_l < y_grb < cfg.y_grb_h) and (score > cfg.score):
+			log('   grb unutar dozvoljene pozicije')
 		else:
-			log('   udaljenost ili kut odstupaju !!')
-			return 0, 'udaljenost ili kut odstupaju'
+			log('   grb van dozvoljene pozicije !!')
+			return 0, 'grb van dozvoljene pozicije'
 	else:
-		log('   grb van dozvoljene pozicije !!')
-		return 0, 'grb van dozvoljene pozicije'
+		log('   portret detektiran (x y): {0} {1}'.format(str(x_face), str(y_face)))
+		# cv2.circle(img_to_show, (x_face,y_face), 5, 255, -1) # MOZE SE ZAKOMENTIRAT - samo u mainu
+		# cv2.imshow('img', img_to_show) # MOZE SE ZAKOMENTIRAT - samo u mainu
+
+	# Jednostavno racunanje sharpness slike. Hardkoridan threshold za provjeru.
+	sharpness = cv2.Laplacian(img_main[int(h*0.05):int(h*0.95), int(w*0.05):int(w*0.95)], cv2.CV_64F).var()
+	log('   sharpness: {0}'.format(str(sharpness)))		
+	if sharpness > cfg.sharpness:
+		return sharpness, ''
+	else:
+		log('   previse blurana !!')
+		return -1, 'previse blurana'	
 
 
 # Glavna funkcija za validaciju straznje strane osobne
@@ -191,9 +182,8 @@ def validate_back_HR(img_path):
 
 	ret, x0, y0, w0, h0 = detect_MRZ(img_main.copy())
 
-	if ret:
-		# if pozicije
-
+	if ret and (x0 > 0) and (y0 > 0) and (x0 + w0 < w) and (y0 + h0 < h):
+		log('   MRZ detektirana (x y w h): {0} {1} {2} {3}'.format(x0, y0, w0, h0))
 		sharpness = cv2.Laplacian(img_main[int(h*0.05):int(h*0.95), int(w*0.05):int(w*0.95)], cv2.CV_64F).var()
 		if sharpness > cfg.sharpness:
 			return sharpness, ''
