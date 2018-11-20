@@ -173,7 +173,7 @@ def detect_MRZ(img_main):
 	img_gray = cv2.cvtColor(img_main, cv2.COLOR_BGR2GRAY)
 	img_gray = cv2.GaussianBlur(img_gray, (3, 3), 0)
 	
-	equ_main = cv2.equalizeHist(img_gray)
+	#equ_main = cv2.equalizeHist(img_gray)
 	clahe = cv2.createCLAHE(clipLimit=1.5, tileGridSize=(8,8))
 	cl1 = clahe.apply(img_gray)
 
@@ -193,7 +193,10 @@ def detect_MRZ(img_main):
 
 	thresh = cv2.morphologyEx(thresh, cv2.MORPH_CLOSE, sqKernel)
 	#cv2.imshow('thresh2', thresh)
-	thresh = cv2.erode(thresh, None, iterations=4)
+	#threshX = cv2.erode(thresh, None, iterations=1)
+	#cv2.imshow('threshX', threshX)
+	kernel = cv2.getStructuringElement(cv2.MORPH_RECT,(5,2))
+	thresh = cv2.erode(thresh, kernel, iterations=1)
 	#cv2.imshow('thresh3', thresh)
 
 	p = int(w * 0.05)

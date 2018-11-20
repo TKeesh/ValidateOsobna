@@ -23,4 +23,5 @@ score = 5
 #angle_h = 40
 
 # prag za minimalnu ostrinu sliku
-sharpness = 70
+sharpness_FRONT = 70 # trebaju li 2 razlicita ?!?!?!
+sharpness_BACK = 45

@@ -149,7 +149,7 @@ def validate_front_HR(img_path):
 		if (cfg.x_grb_l < x_grb < cfg.x_grb_h) and (cfg.y_grb_l < y_grb < cfg.y_grb_h) and (score > cfg.score):
 			log('   grb unutar dozvoljene pozicije')
 		else:
-			log('   grb van dozvoljene pozicije !!')
+			log('   grb van dozvoljene pozicije: {0} {1} {2} !!'.format(x_grb, y_grb, score))
 			return 0, 'grb van dozvoljene pozicije'
 	else:
 		log('   portret detektiran (x y): {0} {1}'.format(str(x_face), str(y_face)))
@@ -159,10 +159,10 @@ def validate_front_HR(img_path):
 	# Jednostavno racunanje sharpness slike. Hardkoridan threshold za provjeru.
 	sharpness = cv2.Laplacian(img_main[int(h*0.05):int(h*0.95), int(w*0.05):int(w*0.95)], cv2.CV_64F).var()
 	log('   sharpness: {0}'.format(str(sharpness)))		
-	if sharpness > cfg.sharpness:
+	if sharpness > cfg.sharpness_FRONT:
 		return sharpness, ''
 	else:
-		log('   previse blurana !!')
+		log('   previse blurana: {0} !!'.format(sharpness))
 		return -1, 'previse blurana'	
 
 
@@ -185,11 +185,11 @@ def validate_back_HR(img_path):
 	if ret and (x0 > 0) and (y0 > 0) and (x0 + w0 < w) and (y0 + h0 < h):
 		log('   MRZ detektirana (x y w h): {0} {1} {2} {3}'.format(x0, y0, w0, h0))
 		sharpness = cv2.Laplacian(img_main[int(h*0.05):int(h*0.95), int(w*0.05):int(w*0.95)], cv2.CV_64F).var()
-		if sharpness > cfg.sharpness:
+		if sharpness > cfg.sharpness_BACK:
 			return sharpness, ''
 		else:
-			log('   previse blurana !!')
+			log('   previse blurana: {0} !!'.format(sharpness))
 			return -1, 'previse blurana'
 	else:
-		log('   MRZ nije detektirana !!')
+		log('   MRZ nije detektirana: {0} {1} {2} {3} {4} !!'.format(ret, x0, y0, w0, h0))
 		return 0, 'MRZ nije detektirana'

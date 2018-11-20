@@ -26,7 +26,7 @@ if __name__ == '__main__':
 	cv2.namedWindow('img')
 
 	imgs = os.listdir(path)
-	imgs = [img for img in imgs if img.lower().endswith('.jpg')]
+	imgs = [img for img in imgs if img.lower().endswith(('.jpg', '.jpeg'))]
 	imgs.sort()
 	to_end = False
 	for img_path in imgs:		
